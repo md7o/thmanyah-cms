@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { DiscoveryService } from './discovery.service';
-import { DiscoveryController } from './discovery.controller';
+
+import { ProgramModule } from './program/program.module';
 
 @Module({
-  controllers: [DiscoveryController],
-  providers: [DiscoveryService],
+  imports: [ProgramModule],
 })
 export class DiscoveryModule {}

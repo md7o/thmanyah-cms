@@ -1,8 +1,8 @@
-import { Inject, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { getPostgresConfig } from './config/database.config';
-import { ContentModule } from './modules/content/content.module';
+import { CmsModule } from './modules/cms/cms.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
 
 @Module({
@@ -16,7 +16,7 @@ import { DiscoveryModule } from './modules/discovery/discovery.module';
       useFactory: (configService: ConfigService) =>
         getPostgresConfig(configService),
     }),
-    ContentModule,
+    CmsModule,
     DiscoveryModule,
   ],
 })
