@@ -7,10 +7,10 @@ export interface UnifiedContentData {
   duration: number;
   source: string;
   publishedAt?: Date;
-  externalId?: string;
+  externalId: string;
 }
 
 // Content Adapter Interface
 export interface IContentAdapter {
-  fetchContent(config?: Record<string, any>): Promise<UnifiedContentData[]>;
+  fetchContent(config?: Record<string, unknown>): Promise<UnifiedContentData[]>;
 }

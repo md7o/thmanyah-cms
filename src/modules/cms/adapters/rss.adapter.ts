@@ -1,13 +1,8 @@
 // xml adapter for RSS feeds
-import {
-  IContentAdapter,
-  UnifiedContentData,
-} from './interface/content-interface';
+import { IContentAdapter, UnifiedContentData } from './interface/content-interface';
 
 export class RSSAdapter implements IContentAdapter {
-  async fetchContent(
-    config?: Record<string, any>,
-  ): Promise<UnifiedContentData[]> {
+  fetchContent(): Promise<UnifiedContentData[]> {
     // XML Simulator
     const rawRssItems = [
       {
@@ -18,13 +13,15 @@ export class RSSAdapter implements IContentAdapter {
     ];
 
     // Translate process
-    return rawRssItems.map((item) => ({
-      title: item.item_title,
-      description: item.summary,
-      videoUrl: item.enclosure.url,
-      duration: parseInt(item.enclosure.length),
-      source: 'RSS Feed',
-      externalId: item.enclosure.url,
-    }));
+    return Promise.resolve(
+      rawRssItems.map((item) => ({
+        title: item.item_title,
+        description: item.summary,
+        videoUrl: item.enclosure.url,
+        duration: parseInt(item.enclosure.length),
+        source: 'RSS Feed',
+        externalId: item.enclosure.url,
+      })),
+    );
   }
 }

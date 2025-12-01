@@ -1,9 +1,7 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 
-export const getPostgresConfig = (
-  configService: ConfigService,
-): TypeOrmModuleOptions => ({
+export const getPostgresConfig = (configService: ConfigService): TypeOrmModuleOptions => ({
   type: 'postgres',
   host: configService.get<string>('DB_HOST'),
   port: Number(configService.get<number>('DB_PORT')),
@@ -14,10 +12,7 @@ export const getPostgresConfig = (
   //   synchronize: configService.get<string>('NODE_ENV') !== 'production',
   synchronize: true,
   // Optional SSL config for managed Postgres (e.g., Heroku, RDS)
-  ssl:
-    configService.get<string>('DB_SSL') === 'true'
-      ? { rejectUnauthorized: false }
-      : undefined,
+  ssl: configService.get<string>('DB_SSL') === 'true' ? { rejectUnauthorized: false } : undefined,
 });
 
 // Helper for non-DI usage (reads from process.env)
@@ -30,6 +25,5 @@ export const getPostgresConfigFromEnv = (): TypeOrmModuleOptions => ({
   database: process.env.DB_NAME,
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: (process.env.NODE_ENV || '') !== 'production',
-  ssl:
-    process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
 });

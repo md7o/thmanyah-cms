@@ -1,9 +1,5 @@
-import { IsString, IsNotEmpty, IsUrl, IsEnum } from 'class-validator';
-
-export enum ImportType {
-  YOUTUBE = 'YOUTUBE',
-  RSS = 'RSS',
-}
+import { IsNotEmpty, IsUrl, IsEnum } from 'class-validator';
+import { ImportType } from 'src/common/enum/import-type';
 
 export class CreateImportDto {
   @IsEnum(ImportType)

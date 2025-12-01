@@ -36,10 +36,7 @@ export class ImportController {
 
   @Put(':id')
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateImportDto: UpdateImportDto,
-  ) {
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateImportDto: UpdateImportDto) {
     return this.importService.update(id, updateImportDto);
   }
 

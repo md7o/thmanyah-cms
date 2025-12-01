@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 
-import { ProgramModule } from './program/program.module';
+import { ContentReadModule } from './content-read/content-read.module';
+import { EpisodeReadModule } from './episode-read/episode-read.module';
 
 @Module({
-  imports: [ProgramModule],
+  imports: [ContentReadModule, EpisodeReadModule],
 })
 export class DiscoveryModule {}

@@ -1,20 +1,18 @@
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { Episode } from './entities/episode.entity';
 import { Repository } from 'typeorm';
 import { Program } from '../program/entities/program.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateEpisodeDto } from './dto/create-episode.dto';
 import { UpdateEpisodeDto } from './dto/update-episode.dto';
+import { SearchService } from '../../discovery/search/search.service';
 
 @Injectable()
 export class EpisodeService {
   constructor(
     @InjectRepository(Program) private programRepo: Repository<Program>,
     @InjectRepository(Episode) private episodeRepo: Repository<Episode>,
+    private readonly searchService: SearchService,
   ) {}
 
   async createEpisode(createEpisodeDto: CreateEpisodeDto): Promise<Episode> {
@@ -40,10 +38,28 @@ export class EpisodeService {
 
     const episode = this.episodeRepo.create({ ...createEpisodeDto });
     const savedEpisode = await this.episodeRepo.save(episode);
-    return savedEpisode as Episode;
+    await this.searchService.indexEpisode(savedEpisode);
+    return savedEpisode;
   }
 
-  async findAll(): Promise<Episode[]> {
+  async findAll(options?: {
+    title?: string;
+    description?: string;
+    episodeNumber?: number;
+    publishDateFrom?: Date;
+  }): Promise<Episode[]> {
+    const { title, description, episodeNumber, publishDateFrom } = options || {};
+    const filterParams = { title, description, episodeNumber, publishDateFrom } as Record<string, unknown>;
+
+    const queryBuilder = this.episodeRepo.createQueryBuilder('episode');
+
+    Object.keys(filterParams).forEach((key) => {
+      if (filterParams[key] !== undefined && filterParams[key] !== null) {
+        queryBuilder.andWhere(`program.${key} = :${key}`, {
+          [key]: filterParams[key],
+        });
+      }
+    });
     return this.episodeRepo.find();
   }
 
@@ -79,13 +95,13 @@ export class EpisodeService {
     });
 
     if (existing && existing.id !== id) {
-      throw new ConflictException(
-        'Episode with this number already exists for the program',
-      );
+      throw new ConflictException('Episode with this number already exists for the program');
     }
 
     Object.assign(episode, dto);
-    return this.episodeRepo.save(episode);
+    const savedEpisode = await this.episodeRepo.save(episode);
+    await this.searchService.indexEpisode(savedEpisode);
+    return savedEpisode;
   }
 
   async remove(id: number): Promise<void> {
@@ -94,5 +110,13 @@ export class EpisodeService {
       throw new NotFoundException('Episode not found');
     }
     await this.episodeRepo.remove(episode);
+  }
+
+  async syncElasticsearch() {
+    const episodes = await this.episodeRepo.find();
+    for (const episode of episodes) {
+      await this.searchService.indexEpisode(episode);
+    }
+    return { count: episodes.length };
   }
 }

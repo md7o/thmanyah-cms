@@ -1,20 +1,16 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Program } from './entities/program.entity';
-import { Episode } from '../episode/entities/episode.entity';
 import { CreateContentDto } from '../dto/content-dto/create-content.dto';
 import { UpdateContentDto } from '../dto/content-dto/update-content.dto';
+import { SearchService } from '../../discovery/search/search.service';
 
 @Injectable()
 export class ProgramService {
   constructor(
     @InjectRepository(Program) private programRepo: Repository<Program>,
-    @InjectRepository(Episode) private episodeRepo: Repository<Episode>,
+    private readonly searchService: SearchService,
   ) {}
 
   // Create Method
@@ -27,9 +23,7 @@ export class ProgramService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        'Program with this title and source already exists',
-      );
+      throw new ConflictException('Program with this title and source already exists');
     }
 
     const program = this.programRepo.create({
@@ -37,12 +31,36 @@ export class ProgramService {
     });
 
     const savedProgram = await this.programRepo.save(program);
+    await this.searchService.indexProgram(savedProgram);
 
     return savedProgram;
   }
 
-  async findAll(): Promise<Program[]> {
-    return this.programRepo.find();
+  async findAll(options?: {
+    title?: string;
+    description?: string;
+    category?: string;
+    language?: string;
+    source: string;
+    page?: number;
+    limit?: number;
+  }): Promise<Program[]> {
+    const { page = 1, limit = 12, ...filters } = options || {};
+    const filterParams = filters as Record<string, unknown>;
+
+    const queryBuilder = this.programRepo.createQueryBuilder('program');
+
+    Object.keys(filterParams).forEach((key) => {
+      if (filterParams[key] !== undefined && filterParams[key] !== null) {
+        queryBuilder.andWhere(`program.${key} = :${key}`, {
+          [key]: filterParams[key],
+        });
+      }
+    });
+
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    return queryBuilder.getMany();
   }
 
   async findOne(id: string): Promise<Program> {
@@ -54,18 +72,17 @@ export class ProgramService {
   }
 
   // Update Method
-  async update(
-    id: string,
-    updateContentDto: UpdateContentDto,
-  ): Promise<Program> {
+  async update(id: string, updateContentDto: UpdateContentDto): Promise<Program> {
     const updateProgram = await this.programRepo.findOneBy({ id });
     if (!updateProgram) {
       throw new NotFoundException(`Program with ID ${id} not found`);
     }
-    return this.programRepo.save({
+    const savedProgram = await this.programRepo.save({
       ...updateProgram,
       ...updateContentDto,
-    } as any);
+    });
+    await this.searchService.update(savedProgram);
+    return savedProgram;
   }
 
   // Remove Method
@@ -77,5 +94,14 @@ export class ProgramService {
     }
 
     await this.programRepo.remove(removeProgram);
+    await this.searchService.remove(id);
+  }
+
+  async syncElasticsearch() {
+    const programs = await this.programRepo.find();
+    for (const program of programs) {
+      await this.searchService.indexProgram(program);
+    }
+    return { count: programs.length };
   }
 }

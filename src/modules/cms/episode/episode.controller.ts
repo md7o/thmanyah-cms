@@ -36,15 +36,17 @@ export class EpisodeController {
 
   @Put(':id')
   @UsePipes(new ValidationPipe({ whitelist: true }))
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateEpisodeDto: UpdateEpisodeDto,
-  ) {
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateEpisodeDto: UpdateEpisodeDto) {
     return this.episodeService.update(id, updateEpisodeDto);
   }
 
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.episodeService.remove(id);
+  }
+
+  @Post('sync')
+  async sync() {
+    return this.episodeService.syncElasticsearch();
   }
 }

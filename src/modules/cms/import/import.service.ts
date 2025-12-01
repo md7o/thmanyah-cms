@@ -2,13 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ImportSource } from './entities/import-source.entity';
-import { CreateImportDto, ImportType } from './dto/create-import.dto';
+import { CreateImportDto } from './dto/create-import.dto';
 import { UpdateImportDto } from './dto/update-import.dto';
 import { RSSAdapter } from '../adapters/rss.adapter';
 import { YouTubeAdapter } from '../adapters/youtube.adapter';
 import { IContentAdapter } from '../adapters/interface/content-interface';
 import { Program } from '../program/entities/program.entity';
 import { Episode } from '../episode/entities/episode.entity';
+import { ImportType } from 'src/common/enum/import-type';
 
 @Injectable()
 export class ImportService {
@@ -30,7 +31,7 @@ export class ImportService {
     try {
       await this.syncContent(savedSource.id);
     } catch (error) {
-      console.error('Auto-sync failed:', error.message);
+      console.error('Auto-sync failed:', error);
     }
 
     return savedSource;
@@ -48,12 +49,11 @@ export class ImportService {
     return importSource;
   }
 
-  async update(
-    id: number,
-    updateImportDto: UpdateImportDto,
-  ): Promise<ImportSource> {
+  async update(id: number, updateImportDto: UpdateImportDto): Promise<ImportSource> {
     const importSource = await this.findOne(id);
+
     Object.assign(importSource, updateImportDto);
+
     return this.importSourceRepo.save(importSource);
   }
 
@@ -72,33 +72,29 @@ export class ImportService {
 
     const contentItems = await adapter.fetchContent({ url: importSource.url });
 
-    // 1. Find or Create Program linked to this ImportSource
+    // Find or Create Program linked to this ImportSource
     let program = await this.programRepo.findOne({
       where: { importSource: { id: importSource.id } },
     });
 
     if (!program) {
-      const programTitle =
-        contentItems.length > 0
-          ? `Imported Program: ${importSource.type}`
-          : 'New Imported Program';
+      const programTitle = contentItems.length > 0 ? `Imported Program: ${importSource.type}` : 'New Imported Program';
 
       program = this.programRepo.create({
         title: programTitle,
         description: `Imported from ${importSource.url}`,
         source: importSource.type,
-        language: 'ar', // Default or detect
-        category: 'General', // Default
+        language: 'ar', // This will be default value
+        category: 'General', // This will be default value
         publishDate: new Date(),
         importSource: importSource,
       });
       program = await this.programRepo.save(program);
     }
 
-    // 2. Sync Episodes
+    // Sync Episodes
     let newEpisodesCount = 0;
 
-    // Get the last episode number to increment from
     const lastEpisode = await this.episodeRepo.findOne({
       where: { programId: program.id },
       order: { episodeNumber: 'DESC' },
@@ -106,9 +102,8 @@ export class ImportService {
     let nextEpisodeNumber = (lastEpisode?.episodeNumber || 0) + 1;
 
     for (const item of contentItems) {
-      // Skip if no externalId (should be fixed in adapters)
       if (!item.externalId) {
-        console.warn(`Skipping item "${item.title}" - No externalId`);
+        console.warn(`Skipping item "${item.title}" No externalId`);
         continue;
       }
 
@@ -145,14 +140,14 @@ export class ImportService {
     };
   }
 
-  private getAdapter(type: ImportType): IContentAdapter | null {
+  private getAdapter(type: ImportType): IContentAdapter | undefined {
     switch (type) {
       case ImportType.RSS:
         return this.rssAdapter;
       case ImportType.YOUTUBE:
         return this.youtubeAdapter;
       default:
-        return null;
+        return undefined;
     }
   }
 }

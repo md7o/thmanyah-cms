@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { getPostgresConfig } from './config/database.config';
 import { CmsModule } from './modules/cms/cms.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
+import { SearchModule } from './modules/discovery/search/search.module';
 
 @Module({
   imports: [
@@ -13,11 +14,11 @@ import { DiscoveryModule } from './modules/discovery/discovery.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) =>
-        getPostgresConfig(configService),
+      useFactory: (configService: ConfigService) => getPostgresConfig(configService),
     }),
     CmsModule,
     DiscoveryModule,
+    SearchModule,
   ],
 })
 export class AppModule {}

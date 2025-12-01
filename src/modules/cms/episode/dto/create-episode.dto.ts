@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsInt,
-  IsDateString,
-  IsUUID,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsDateString, IsUUID } from 'class-validator';
 
 export class CreateEpisodeDto {
   @IsUUID()
