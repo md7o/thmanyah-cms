@@ -5,12 +5,15 @@ import { Program } from './entities/program.entity';
 import { CreateContentDto } from '../dto/content-dto/create-content.dto';
 import { UpdateContentDto } from '../dto/content-dto/update-content.dto';
 import { SearchService } from '../../discovery/search/search.service';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 
 @Injectable()
 export class ProgramService {
   constructor(
     @InjectRepository(Program) private programRepo: Repository<Program>,
     private readonly searchService: SearchService,
+    @InjectQueue('search-queue') private searchQueue: Queue,
   ) {}
 
   // Create Method
@@ -31,7 +34,7 @@ export class ProgramService {
     });
 
     const savedProgram = await this.programRepo.save(program);
-    await this.searchService.indexProgram(savedProgram);
+    await this.searchQueue.add('index-program', savedProgram);
 
     return savedProgram;
   }
@@ -81,7 +84,7 @@ export class ProgramService {
       ...updateProgram,
       ...updateContentDto,
     });
-    await this.searchService.update(savedProgram);
+    await this.searchQueue.add('update-program', savedProgram);
     return savedProgram;
   }
 
@@ -94,14 +97,12 @@ export class ProgramService {
     }
 
     await this.programRepo.remove(removeProgram);
-    await this.searchService.remove(id);
+    await this.searchQueue.add('remove-program', { id });
   }
 
   async syncElasticsearch() {
     const programs = await this.programRepo.find();
-    for (const program of programs) {
-      await this.searchService.indexProgram(program);
-    }
+    await this.searchService.bulkIndexPrograms(programs);
     return { count: programs.length };
   }
 }

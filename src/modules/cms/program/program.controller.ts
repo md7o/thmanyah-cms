@@ -43,10 +43,4 @@ export class ProgramController {
   async remove(@Param('id') id: string) {
     return this.programService.remove(id);
   }
-
-  @Post('sync')
-  async sync() {
-    return this.programService.syncElasticsearch();
-  }
-  // curl -X POST http://localhost:3000/program/sync
 }

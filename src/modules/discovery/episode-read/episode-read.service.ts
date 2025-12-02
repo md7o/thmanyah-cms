@@ -11,8 +11,8 @@ export class EpisodeReadService {
   ) {}
 
   async findAll(query: GetEpisodeReadDto) {
-    const { title, page, limit, ...filters } = query;
-    return this.searchService.searchEpisodes(title, filters, page, limit);
+    const { page, limit, ...filters } = query;
+    return this.searchService.searchEpisodes(undefined, filters, page, limit);
   }
 
   async findOne(id: number) {

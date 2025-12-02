@@ -47,6 +47,7 @@ export class ImportController {
 
   @Post(':id/sync')
   async sync(@Param('id', ParseIntPipe) id: number) {
-    return this.importService.syncContent(id);
+    await this.importService.queueSync(id);
+    return { message: 'Sync started in background' };
   }
 }

@@ -49,6 +49,6 @@ export class Program {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @OneToMany(() => Episode, (episode) => episode.program)
+  @OneToMany(() => Episode, (episode) => episode.program, { cascade: true, onDelete: 'CASCADE' })
   episodes: Episode[];
 }

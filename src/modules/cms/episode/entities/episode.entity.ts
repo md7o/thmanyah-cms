@@ -3,7 +3,7 @@ import { Program } from '../../program/entities/program.entity';
 
 @Entity({ name: 'episodes' })
 export class Episode {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn('uuid')
   id: number;
 
   @Column({ type: 'uuid' })

@@ -6,6 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { CreateEpisodeDto } from './dto/create-episode.dto';
 import { UpdateEpisodeDto } from './dto/update-episode.dto';
 import { SearchService } from '../../discovery/search/search.service';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 
 @Injectable()
 export class EpisodeService {
@@ -13,6 +15,7 @@ export class EpisodeService {
     @InjectRepository(Program) private programRepo: Repository<Program>,
     @InjectRepository(Episode) private episodeRepo: Repository<Episode>,
     private readonly searchService: SearchService,
+    @InjectQueue('search-queue') private searchQueue: Queue,
   ) {}
 
   async createEpisode(createEpisodeDto: CreateEpisodeDto): Promise<Episode> {
@@ -38,7 +41,7 @@ export class EpisodeService {
 
     const episode = this.episodeRepo.create({ ...createEpisodeDto });
     const savedEpisode = await this.episodeRepo.save(episode);
-    await this.searchService.indexEpisode(savedEpisode);
+    await this.searchQueue.add('index-episode', savedEpisode);
     return savedEpisode;
   }
 
@@ -55,7 +58,7 @@ export class EpisodeService {
 
     Object.keys(filterParams).forEach((key) => {
       if (filterParams[key] !== undefined && filterParams[key] !== null) {
-        queryBuilder.andWhere(`program.${key} = :${key}`, {
+        queryBuilder.andWhere(`episode.${key} = :${key}`, {
           [key]: filterParams[key],
         });
       }
@@ -100,7 +103,7 @@ export class EpisodeService {
 
     Object.assign(episode, dto);
     const savedEpisode = await this.episodeRepo.save(episode);
-    await this.searchService.indexEpisode(savedEpisode);
+    await this.searchQueue.add('index-episode', savedEpisode);
     return savedEpisode;
   }
 
@@ -110,13 +113,12 @@ export class EpisodeService {
       throw new NotFoundException('Episode not found');
     }
     await this.episodeRepo.remove(episode);
+    await this.searchQueue.add('remove-episode', { id: id.toString() });
   }
 
   async syncElasticsearch() {
     const episodes = await this.episodeRepo.find();
-    for (const episode of episodes) {
-      await this.searchService.indexEpisode(episode);
-    }
+    await this.searchService.bulkIndexEpisodes(episodes);
     return { count: episodes.length };
   }
 }

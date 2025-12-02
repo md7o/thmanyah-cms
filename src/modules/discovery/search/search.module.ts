@@ -5,6 +5,8 @@ import { SearchService } from './search.service';
 import { ClientOptions } from '@elastic/elasticsearch';
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
+import { BullModule } from '@nestjs/bull';
+import { SearchProcessor } from './search.processor';
 
 @Module({
   imports: [
@@ -33,8 +35,11 @@ import * as redisStore from 'cache-manager-redis-store';
       },
       inject: [ConfigService],
     }),
+    BullModule.registerQueue({
+      name: 'search-queue',
+    }),
   ],
-  providers: [SearchService],
-  exports: [SearchService],
+  providers: [SearchService, SearchProcessor],
+  exports: [SearchService, BullModule],
 })
 export class SearchModule {}

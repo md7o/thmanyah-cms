@@ -1,0 +1,89 @@
+QUICK START GUIDE
+=================
+
+1. PRE-REQUISITES
+-----------------
+- Node.js (v18+)
+- Docker & Docker Compose
+- PostgreSQL Database (running locally or remotely)
+
+2. SETUP ENVIRONMENT
+--------------------
+Create a `.env` file in the root directory with the following variables:
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=postgres
+DB_NAME=thmanyah_cms
+DB_SSL=false
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Elasticsearch
+ELASTICSEARCH_NODE=http://localhost:9200
+ELASTICSEARCH_USERNAME=elastic
+ELASTICSEARCH_PASSWORD=changeme
+
+# YouTube API (Optional for Import)
+YOUTUBE_API_KEY=your_api_key
+YOUTUBE_CHANNEL_ID=your_channel_id
+
+3. START INFRASTRUCTURE
+-----------------------
+Start Elasticsearch and Redis using Docker:
+$ docker-compose up -d
+
+4. INSTALL & RUN
+----------------
+Install dependencies:
+$ npm install
+
+Start the application:
+$ npm run start:dev
+
+The API will be available at: http://localhost:3000
+Swagger Documentation: http://localhost:3000/api
+
+5. INITIALIZE ELASTICSEARCH
+---------------------------
+After the application is running and you have data in your database, 
+run these APIs to sync your data to Elasticsearch:
+
+# Sync Programs
+POST http://localhost:3000/maintenance/sync/programs
+
+# Sync Episodes
+POST http://localhost:3000/maintenance/sync/episodes
+
+You can use the Swagger UI (http://localhost:3000/api) to execute these easily.
+
+6. RESET ELASTICSEARCH (DEV MODE)
+---------------------------------
+If you need to wipe Elasticsearch and re-sync from your local DB (development only), use the helper script.
+
+Quick (recommended):
+
+```bash
+chmod +x reset_search.sh
+./reset_search.sh
+```
+
+No-permission option:
+
+```bash
+bash reset_search.sh
+```
+
+What the script does:
+- Deletes the `programs` and `episodes` indices in Elasticsearch.
+- Calls the maintenance endpoints to re-index data from the database.
+
+Quick notes:
+- `chmod +x` adds execute permission so `./reset_search.sh` works.
+- `chmod -x` removes execute permission (then `./reset_search.sh` will be denied).
+- Check permissions with `ls -l reset_search.sh`.
+- Only run this in development (it deletes ES data).

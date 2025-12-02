@@ -44,9 +44,4 @@ export class EpisodeController {
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.episodeService.remove(id);
   }
-
-  @Post('sync')
-  async sync() {
-    return this.episodeService.syncElasticsearch();
-  }
 }

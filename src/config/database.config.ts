@@ -9,9 +9,8 @@ export const getPostgresConfig = (configService: ConfigService): TypeOrmModuleOp
   password: configService.get<string>('DB_PASSWORD'),
   database: configService.get<string>('DB_NAME'),
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-  //   synchronize: configService.get<string>('NODE_ENV') !== 'production',
-  synchronize: true,
-  // Optional SSL config for managed Postgres (e.g., Heroku, RDS)
+  synchronize: configService.get<string>('NODE_ENV') !== 'production',
+
   ssl: configService.get<string>('DB_SSL') === 'true' ? { rejectUnauthorized: false } : undefined,
 });
 

@@ -13,6 +13,7 @@ interface SearchFilters {
 }
 
 interface EpisodeSearchFilters {
+  title?: string;
   description?: string;
   episodeNumber?: number;
   publishDateFrom?: Date;
@@ -25,10 +26,12 @@ export class SearchService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
+  // Generates a unique cache key.
   private getCacheKey(prefix: string, ...args: any[]): string {
     return `${prefix}:${args.map((arg) => JSON.stringify(arg)).join(':')}`;
   }
 
+  // Indexes a program in Elasticsearch.
   async indexProgram(program: Program) {
     return this.esSearch.index({
       index: 'programs',
@@ -44,6 +47,7 @@ export class SearchService {
     });
   }
 
+  // Indexes an episode in Elasticsearch.
   async indexEpisode(episode: Episode) {
     return this.esSearch.index({
       index: 'episodes',
@@ -59,6 +63,7 @@ export class SearchService {
     });
   }
 
+  // Searches programs with text and filters.
   async search(text?: string, filters?: SearchFilters, page: number = 1, limit: number = 12) {
     const cacheKey = this.getCacheKey('search:programs', text, filters, page, limit);
     const cachedResult = await this.cacheManager.get(cacheKey);
@@ -101,6 +106,7 @@ export class SearchService {
     return hits;
   }
 
+  // Searches episodes with text and filters.
   async searchEpisodes(
     text: string | undefined,
     filters: EpisodeSearchFilters = {},
@@ -125,24 +131,21 @@ export class SearchService {
       });
     }
 
+    const createFuzzyMatch = (field: string, value: string) => ({
+      match: {
+        [field]: {
+          query: value,
+          operator: 'and',
+          fuzziness: 'AUTO',
+        },
+      },
+    });
+
     const strategies: Record<keyof EpisodeSearchFilters, (val: any) => any> = {
-      description: (val) => ({
-        match: {
-          description: val,
-        },
-      }),
-      episodeNumber: (val) => ({
-        term: {
-          episodeNumber: val,
-        },
-      }),
-      publishDateFrom: (val) => ({
-        range: {
-          publishDate: {
-            gte: val,
-          },
-        },
-      }),
+      title: (val) => createFuzzyMatch('title', val),
+      description: (val) => createFuzzyMatch('description', val),
+      episodeNumber: (val) => ({ term: { episodeNumber: val } }),
+      publishDateFrom: (val) => ({ range: { publishDate: { gte: val } } }),
     };
 
     Object.entries(filters).forEach(([key, value]) => {
@@ -167,6 +170,7 @@ export class SearchService {
     return hits;
   }
 
+  // Updates a program in Elasticsearch.
   async update(program: Program) {
     const data: Record<string, unknown> = {
       title: program.title,
@@ -178,7 +182,7 @@ export class SearchService {
     };
 
     const script = Object.entries(data)
-      .map(([key, value]) => `ctx._source.${key}='${String(value)}';`)
+      .map(([key]) => `ctx._source.${key}=params.${key};`)
       .join(' ');
 
     return this.esSearch.update({
@@ -186,14 +190,62 @@ export class SearchService {
       id: program.id,
       script: {
         source: script,
+        params: data,
       },
     });
   }
 
+  // Removes a program from Elasticsearch.
   async remove(id: string) {
     await this.esSearch.delete({
       index: 'programs',
       id: id,
     });
+  }
+
+  // Removes an episode from Elasticsearch.
+  async removeEpisode(id: string) {
+    await this.esSearch.delete({
+      index: 'episodes',
+      id: id,
+    });
+  }
+
+  // Bulk indexes programs.
+  async bulkIndexPrograms(programs: Program[]) {
+    const operations = programs.flatMap((program) => [
+      { index: { _index: 'programs', _id: program.id } },
+      {
+        title: program.title,
+        description: program.description,
+        category: program.category,
+        language: program.language,
+        source: program.source,
+        createdAt: program.createdAt,
+      },
+    ]);
+
+    if (operations.length > 0) {
+      await this.esSearch.bulk({ operations });
+    }
+  }
+
+  // Bulk indexes episodes.
+  async bulkIndexEpisodes(episodes: Episode[]) {
+    const operations = episodes.flatMap((episode) => [
+      { index: { _index: 'episodes', _id: episode.id.toString() } },
+      {
+        title: episode.title,
+        description: episode.description,
+        programId: episode.programId,
+        duration: episode.duration,
+        publishDate: episode.publishDate,
+        episodeNumber: episode.episodeNumber,
+      },
+    ]);
+
+    if (operations.length > 0) {
+      await this.esSearch.bulk({ operations });
+    }
   }
 }

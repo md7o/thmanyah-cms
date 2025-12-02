@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { Repository } from 'typeorm';
 import { ImportSource } from './entities/import-source.entity';
 import { CreateImportDto } from './dto/create-import.dto';
@@ -20,6 +22,7 @@ export class ImportService {
     private programRepo: Repository<Program>,
     @InjectRepository(Episode)
     private episodeRepo: Repository<Episode>,
+    @InjectQueue('import-queue') private importQueue: Queue,
     private rssAdapter: RSSAdapter,
     private youtubeAdapter: YouTubeAdapter,
   ) {}
@@ -28,11 +31,7 @@ export class ImportService {
     const importSource = this.importSourceRepo.create(createImportDto);
     const savedSource = await this.importSourceRepo.save(importSource);
 
-    try {
-      await this.syncContent(savedSource.id);
-    } catch (error) {
-      console.error('Auto-sync failed:', error);
-    }
+    await this.importQueue.add('sync-content', { id: savedSource.id });
 
     return savedSource;
   }
@@ -60,6 +59,10 @@ export class ImportService {
   async remove(id: number): Promise<void> {
     const importSource = await this.findOne(id);
     await this.importSourceRepo.remove(importSource);
+  }
+
+  async queueSync(id: number) {
+    await this.importQueue.add('sync-content', { id });
   }
 
   async syncContent(id: number) {
