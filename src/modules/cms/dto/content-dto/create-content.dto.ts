@@ -18,7 +18,7 @@ export class CreateContentDto {
 
   @IsDateString()
   @IsNotEmpty()
-  publishDate: Date;
+  publishDate: string;
 
   @IsString()
   @IsNotEmpty()

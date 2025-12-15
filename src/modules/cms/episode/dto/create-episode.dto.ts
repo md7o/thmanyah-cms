@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsInt, IsDateString, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, IsDateString, IsUUID, IsOptional } from 'class-validator';
 
 export class CreateEpisodeDto {
   @IsUUID()
@@ -11,6 +11,10 @@ export class CreateEpisodeDto {
   @IsString()
   @IsNotEmpty()
   description: string;
+
+  @IsString()
+  @IsOptional()
+  slug?: string;
 
   @IsInt()
   duration: number;

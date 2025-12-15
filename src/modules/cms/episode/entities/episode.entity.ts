@@ -4,7 +4,7 @@ import { Program } from '../../program/entities/program.entity';
 @Entity({ name: 'episodes' })
 export class Episode {
   @PrimaryGeneratedColumn('uuid')
-  id: number;
+  id: string;
 
   @Column({ type: 'uuid' })
   programId: string;
@@ -15,6 +15,9 @@ export class Episode {
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  slug: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   externalId: string;

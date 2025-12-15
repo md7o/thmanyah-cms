@@ -1,8 +1,9 @@
-// xml adapter for RSS feeds
+import { Injectable } from '@nestjs/common';
 import { IContentAdapter, UnifiedContentData } from './interface/content-interface';
 
+@Injectable()
 export class RSSAdapter implements IContentAdapter {
-  fetchContent(): Promise<UnifiedContentData[]> {
+  async fetchContent(): Promise<UnifiedContentData[]> {
     // XML Simulator
     const rawRssItems = [
       {
@@ -12,16 +13,13 @@ export class RSSAdapter implements IContentAdapter {
       },
     ];
 
-    // Translate process
-    return Promise.resolve(
-      rawRssItems.map((item) => ({
-        title: item.item_title,
-        description: item.summary,
-        videoUrl: item.enclosure.url,
-        duration: parseInt(item.enclosure.length),
-        source: 'RSS Feed',
-        externalId: item.enclosure.url,
-      })),
-    );
+    return rawRssItems.map((item) => ({
+      title: item.item_title,
+      description: item.summary,
+      videoUrl: item.enclosure.url,
+      duration: parseInt(item.enclosure.length),
+      source: 'RSS Feed',
+      externalId: item.enclosure.url,
+    }));
   }
 }

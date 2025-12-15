@@ -1,5 +1,4 @@
 // Adapter For Content Module
-
 export interface UnifiedContentData {
   title: string;
   description: string;

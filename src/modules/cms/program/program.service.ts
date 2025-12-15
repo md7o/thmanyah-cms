@@ -39,31 +39,24 @@ export class ProgramService {
     return savedProgram;
   }
 
-  async findAll(options?: {
-    title?: string;
-    description?: string;
-    category?: string;
-    language?: string;
-    source: string;
-    page?: number;
-    limit?: number;
-  }): Promise<Program[]> {
-    const { page = 1, limit = 12, ...filters } = options || {};
-    const filterParams = filters as Record<string, unknown>;
+  async findAll(
+    options: {
+      title?: string;
+      description?: string;
+      category?: string;
+      language?: string;
+      source?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ): Promise<Program[]> {
+    const { page = 1, limit = 12, ...filters } = options;
 
-    const queryBuilder = this.programRepo.createQueryBuilder('program');
-
-    Object.keys(filterParams).forEach((key) => {
-      if (filterParams[key] !== undefined && filterParams[key] !== null) {
-        queryBuilder.andWhere(`program.${key} = :${key}`, {
-          [key]: filterParams[key],
-        });
-      }
+    return this.programRepo.find({
+      where: filters,
+      skip: (page - 1) * limit,
+      take: limit,
     });
-
-    queryBuilder.skip((page - 1) * limit).take(limit);
-
-    return queryBuilder.getMany();
   }
 
   async findOne(id: string): Promise<Program> {
@@ -100,6 +93,7 @@ export class ProgramService {
     await this.searchQueue.add('remove-program', { id });
   }
 
+  // This method re-indexes all programs in Elasticsearch
   async syncElasticsearch() {
     const programs = await this.programRepo.find();
     await this.searchService.bulkIndexPrograms(programs);

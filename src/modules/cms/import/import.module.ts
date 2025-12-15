@@ -9,6 +9,7 @@ import { RSSAdapter } from '../adapters/rss.adapter';
 import { YouTubeAdapter } from '../adapters/youtube.adapter';
 import { Program } from '../program/entities/program.entity';
 import { Episode } from '../episode/entities/episode.entity';
+import { CircuitBreakerService } from '../../../common/services/circuit-breaker.service';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { Episode } from '../episode/entities/episode.entity';
     }),
   ],
   controllers: [ImportController],
-  providers: [ImportService, ImportProcessor, RSSAdapter, YouTubeAdapter],
+  providers: [ImportService, ImportProcessor, RSSAdapter, YouTubeAdapter, CircuitBreakerService],
   exports: [ImportService],
 })
 export class ImportModule {}

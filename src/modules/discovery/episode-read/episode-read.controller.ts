@@ -23,7 +23,7 @@ export class EpisodeReadController {
   @Get(':id')
   @ApiOperation({ summary: 'Get episode by ID' })
   @ApiResponse({ status: 200, description: 'Return episode details.' })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  async findOne(@Param('id') id: string) {
     return this.episodeReadService.findOne(id);
   }
 }

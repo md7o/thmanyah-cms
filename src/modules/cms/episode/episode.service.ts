@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { Episode } from './entities/episode.entity';
-import { Repository } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Program } from '../program/entities/program.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateEpisodeDto } from './dto/create-episode.dto';
@@ -8,6 +8,7 @@ import { UpdateEpisodeDto } from './dto/update-episode.dto';
 import { SearchService } from '../../discovery/search/search.service';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { generateSlug } from '../../../common/utils/slug.helper';
 
 @Injectable()
 export class EpisodeService {
@@ -39,34 +40,55 @@ export class EpisodeService {
       throw new ConflictException('This Episode already exists');
     }
 
-    const episode = this.episodeRepo.create({ ...createEpisodeDto });
+    const slug = await this.ensureUniqueSlug(
+      createEpisodeDto.slug || generateSlug(createEpisodeDto.title),
+      createEpisodeDto.programId,
+    );
+
+    const episode = this.episodeRepo.create({ ...createEpisodeDto, slug });
     const savedEpisode = await this.episodeRepo.save(episode);
+
     await this.searchQueue.add('index-episode', savedEpisode);
     return savedEpisode;
   }
 
-  async findAll(options?: {
-    title?: string;
-    description?: string;
-    episodeNumber?: number;
-    publishDateFrom?: Date;
-  }): Promise<Episode[]> {
-    const { title, description, episodeNumber, publishDateFrom } = options || {};
-    const filterParams = { title, description, episodeNumber, publishDateFrom } as Record<string, unknown>;
+  private async ensureUniqueSlug(slug: string, programId: string, existingId?: string): Promise<string> {
+    let uniqueSlug = slug;
+    let counter = 1;
 
-    const queryBuilder = this.episodeRepo.createQueryBuilder('episode');
+    while (true) {
+      const existing = await this.episodeRepo.findOne({
+        where: { slug: uniqueSlug, programId },
+      });
 
-    Object.keys(filterParams).forEach((key) => {
-      if (filterParams[key] !== undefined && filterParams[key] !== null) {
-        queryBuilder.andWhere(`episode.${key} = :${key}`, {
-          [key]: filterParams[key],
-        });
+      if (!existing || (existingId && existing.id === existingId)) {
+        return uniqueSlug;
       }
-    });
-    return this.episodeRepo.find();
+
+      uniqueSlug = `${slug}-${counter}`;
+      counter++;
+    }
   }
 
-  async findOne(id: number): Promise<Episode> {
+  async findAll(
+    options: {
+      title?: string;
+      description?: string;
+      episodeNumber?: number;
+      publishDateFrom?: Date;
+    } = {},
+  ): Promise<Episode[]> {
+    const { publishDateFrom, ...filters } = options;
+
+    return this.episodeRepo.find({
+      where: {
+        ...filters,
+        ...(publishDateFrom ? { publishDate: MoreThanOrEqual(publishDateFrom) } : {}),
+      },
+    });
+  }
+
+  async findOne(id: string): Promise<Episode> {
     const episode = await this.episodeRepo.findOne({ where: { id } });
     if (!episode) {
       throw new NotFoundException('Episode not found');
@@ -74,31 +96,28 @@ export class EpisodeService {
     return episode;
   }
 
-  async update(id: number, dto: UpdateEpisodeDto): Promise<Episode> {
-    const episode = await this.episodeRepo.findOne({ where: { id } });
-    if (!episode) {
-      throw new NotFoundException('Episode not found');
-    }
+  async update(id: string, dto: UpdateEpisodeDto): Promise<Episode> {
+    const episode = await this.findOne(id);
 
     if (dto.programId) {
       const program = await this.programRepo.findOneBy({ id: dto.programId });
-      if (!program) {
-        throw new NotFoundException('Program not found');
+      if (!program) throw new NotFoundException('Program not found');
+    }
+
+    if (dto.episodeNumber || dto.programId) {
+      const existing = await this.episodeRepo.findOne({
+        where: {
+          programId: dto.programId ?? episode.programId,
+          episodeNumber: dto.episodeNumber ?? episode.episodeNumber,
+        },
+      });
+      if (existing && existing.id !== id) {
+        throw new ConflictException('Episode with this number already exists for the program');
       }
     }
 
-    const newProgramId = dto.programId ?? episode.programId;
-    const newEpisodeNumber = dto.episodeNumber ?? episode.episodeNumber;
-
-    const existing = await this.episodeRepo.findOne({
-      where: {
-        programId: newProgramId,
-        episodeNumber: newEpisodeNumber,
-      },
-    });
-
-    if (existing && existing.id !== id) {
-      throw new ConflictException('Episode with this number already exists for the program');
+    if (dto.slug) {
+      dto.slug = await this.ensureUniqueSlug(dto.slug, dto.programId ?? episode.programId, id);
     }
 
     Object.assign(episode, dto);
@@ -107,13 +126,13 @@ export class EpisodeService {
     return savedEpisode;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: string): Promise<void> {
     const episode = await this.episodeRepo.findOne({ where: { id } });
     if (!episode) {
       throw new NotFoundException('Episode not found');
     }
     await this.episodeRepo.remove(episode);
-    await this.searchQueue.add('remove-episode', { id: id.toString() });
+    await this.searchQueue.add('remove-episode', { id });
   }
 
   async syncElasticsearch() {

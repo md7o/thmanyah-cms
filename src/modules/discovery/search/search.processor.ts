@@ -8,6 +8,7 @@ import { Episode } from '../../cms/episode/entities/episode.entity';
 export class SearchProcessor {
   constructor(private readonly searchService: SearchService) {}
 
+  // Program Jobs
   @Process('index-program')
   async handleIndexProgram(job: Job<Program>) {
     await this.searchService.indexProgram(job.data);
@@ -23,6 +24,7 @@ export class SearchProcessor {
     await this.searchService.remove(job.data.id);
   }
 
+  // Episode Jobs
   @Process('index-episode')
   async handleIndexEpisode(job: Job<Episode>) {
     await this.searchService.indexEpisode(job.data);
@@ -32,12 +34,4 @@ export class SearchProcessor {
   async handleRemoveEpisode(job: Job<{ id: string }>) {
     await this.searchService.removeEpisode(job.data.id);
   }
-
-  // Note: SearchService doesn't have a specific updateEpisode method, it likely uses indexEpisode for upsert
-  // But let's check if we need one. indexEpisode uses esSearch.index which overwrites.
-  // If we want partial update we might need to add it to SearchService, but for now let's assume index is fine.
-
-  // Wait, SearchService.remove takes a string ID. Episode ID is number.
-  // SearchService.remove is for programs (index: 'programs').
-  // We need a removeEpisode method in SearchService.
 }

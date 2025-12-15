@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { ImportSource } from './entities/import-source.entity';
 import { CreateImportDto } from './dto/create-import.dto';
 import { UpdateImportDto } from './dto/update-import.dto';
@@ -12,19 +12,17 @@ import { IContentAdapter } from '../adapters/interface/content-interface';
 import { Program } from '../program/entities/program.entity';
 import { Episode } from '../episode/entities/episode.entity';
 import { ImportType } from 'src/common/enum/import-type';
+import { generateSlug } from '../../../common/utils/slug.helper';
 
 @Injectable()
 export class ImportService {
   constructor(
     @InjectRepository(ImportSource)
     private importSourceRepo: Repository<ImportSource>,
-    @InjectRepository(Program)
-    private programRepo: Repository<Program>,
-    @InjectRepository(Episode)
-    private episodeRepo: Repository<Episode>,
     @InjectQueue('import-queue') private importQueue: Queue,
     private rssAdapter: RSSAdapter,
     private youtubeAdapter: YouTubeAdapter,
+    private dataSource: DataSource,
   ) {}
 
   async create(createImportDto: CreateImportDto): Promise<ImportSource> {
@@ -40,7 +38,7 @@ export class ImportService {
     return this.importSourceRepo.find();
   }
 
-  async findOne(id: number): Promise<ImportSource> {
+  async findOne(id: string): Promise<ImportSource> {
     const importSource = await this.importSourceRepo.findOneBy({ id });
     if (!importSource) {
       throw new NotFoundException(`ImportSource with ID ${id} not found`);
@@ -48,7 +46,7 @@ export class ImportService {
     return importSource;
   }
 
-  async update(id: number, updateImportDto: UpdateImportDto): Promise<ImportSource> {
+  async update(id: string, updateImportDto: UpdateImportDto): Promise<ImportSource> {
     const importSource = await this.findOne(id);
 
     Object.assign(importSource, updateImportDto);
@@ -56,91 +54,85 @@ export class ImportService {
     return this.importSourceRepo.save(importSource);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: string): Promise<void> {
     const importSource = await this.findOne(id);
     await this.importSourceRepo.remove(importSource);
   }
 
-  async queueSync(id: number) {
+  async queueSync(id: string) {
     await this.importQueue.add('sync-content', { id });
   }
 
-  async syncContent(id: number) {
+  async syncContent(id: string) {
     const importSource = await this.findOne(id);
     const adapter = this.getAdapter(importSource.type as ImportType);
-
-    if (!adapter) {
-      throw new Error(`No adapter found for type ${importSource.type}`);
-    }
+    if (!adapter) throw new Error(`No adapter found for type ${importSource.type}`);
 
     const contentItems = await adapter.fetchContent({ url: importSource.url });
 
-    // Find or Create Program linked to this ImportSource
-    let program = await this.programRepo.findOne({
-      where: { importSource: { id: importSource.id } },
-    });
+    return this.dataSource.transaction(async (manager) => {
+      const programRepo = manager.getRepository(Program);
+      const episodeRepo = manager.getRepository(Episode);
 
-    if (!program) {
-      const programTitle = contentItems.length > 0 ? `Imported Program: ${importSource.type}` : 'New Imported Program';
+      let program = await programRepo.findOne({ where: { importSource: { id: importSource.id } } });
 
-      program = this.programRepo.create({
-        title: programTitle,
-        description: `Imported from ${importSource.url}`,
-        source: importSource.type,
-        language: 'ar', // This will be default value
-        category: 'General', // This will be default value
-        publishDate: new Date(),
-        importSource: importSource,
-      });
-      program = await this.programRepo.save(program);
-    }
-
-    // Sync Episodes
-    let newEpisodesCount = 0;
-
-    const lastEpisode = await this.episodeRepo.findOne({
-      where: { programId: program.id },
-      order: { episodeNumber: 'DESC' },
-    });
-    let nextEpisodeNumber = (lastEpisode?.episodeNumber || 0) + 1;
-
-    for (const item of contentItems) {
-      if (!item.externalId) {
-        console.warn(`Skipping item "${item.title}" No externalId`);
-        continue;
+      if (!program) {
+        program = await programRepo.save(
+          programRepo.create({
+            title: contentItems.length ? `Imported Program: ${importSource.type}` : 'New Imported Program',
+            description: `Imported from ${importSource.url}`,
+            source: importSource.type,
+            language: 'ar',
+            category: 'General',
+            publishDate: new Date(),
+            importSource,
+          }),
+        );
       }
 
-      const existingEpisode = await this.episodeRepo.findOne({
-        where: {
-          programId: program.id,
-          externalId: item.externalId,
-        },
+      const lastEpisode = await episodeRepo.findOne({
+        where: { programId: program.id },
+        order: { episodeNumber: 'DESC' },
       });
+      let nextEpisodeNumber = (lastEpisode?.episodeNumber || 0) + 1;
+      let newEpisodesCount = 0;
 
-      if (!existingEpisode) {
-        const episode = this.episodeRepo.create({
-          title: item.title,
-          externalId: item.externalId,
-          description: item.description || '',
-          duration: item.duration || 0,
-          publishDate: item.publishedAt || new Date(),
-          episodeNumber: nextEpisodeNumber++,
-          programId: program.id,
-        });
-        await this.episodeRepo.save(episode);
+      for (const item of contentItems) {
+        if (!item.externalId) continue;
+
+        const exists = await episodeRepo.findOneBy({ programId: program.id, externalId: item.externalId });
+        if (exists) continue;
+
+        let slug = generateSlug(item.title);
+        let counter = 1;
+        while (await episodeRepo.findOneBy({ slug, programId: program.id })) {
+          slug = `${generateSlug(item.title)}-${counter++}`;
+        }
+
+        await episodeRepo.save(
+          episodeRepo.create({
+            title: item.title,
+            slug,
+            externalId: item.externalId,
+            description: item.description || '',
+            duration: item.duration || 0,
+            publishDate: item.publishedAt || new Date(),
+            episodeNumber: nextEpisodeNumber++,
+            programId: program.id,
+          }),
+        );
         newEpisodesCount++;
       }
-    }
 
-    importSource.lastImportedAt = new Date();
-    await this.importSourceRepo.save(importSource);
+      await manager.save(Object.assign(importSource, { lastImportedAt: new Date() }));
 
-    return {
-      message: 'Sync completed',
-      programId: program.id,
-      totalItems: contentItems.length,
-      newEpisodes: newEpisodesCount,
-    };
+      return {
+        message: 'Sync completed',
+        programId: program.id,
+        totalItems: contentItems.length,
+        newEpisodes: newEpisodesCount,
+      };
+    });
   }
 
   private getAdapter(type: ImportType): IContentAdapter | undefined {

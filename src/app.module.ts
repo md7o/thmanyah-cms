@@ -5,6 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { LoggerModule } from 'nestjs-pino';
 import { BullModule } from '@nestjs/bull';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { Redis } from 'ioredis';
 import { getPostgresConfig } from './config/database.config';
 import { CmsModule } from './modules/cms/cms.module';
 import { DiscoveryModule } from './modules/discovery/discovery.module';
@@ -17,13 +19,24 @@ import { MaintenanceModule } from './modules/maintenance/maintenance.module';
       isGlobal: true,
     }),
 
-    // 100 requests per minute
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: 60000,
+            limit: 300000,
+          },
+        ],
+        storage: new ThrottlerStorageRedisService(
+          new Redis({
+            host: config.get('REDIS_HOST'),
+            port: config.get('REDIS_PORT'),
+          }),
+        ),
+      }),
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
