@@ -78,15 +78,9 @@ Thmanyah CMS - A content management system built with [NestJS](https://github.co
    The API will be available at: http://localhost:3000
    Swagger Documentation: http://localhost:3000/api
 
-## Run tests
+## Run e2e tests
 
 ```bash
-# unit tests
-$ npm run test
-
 # e2e tests
 $ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
 ```
