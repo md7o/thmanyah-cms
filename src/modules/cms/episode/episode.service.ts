@@ -20,7 +20,6 @@ export class EpisodeService {
   ) {}
 
   async createEpisode(createEpisodeDto: CreateEpisodeDto): Promise<Episode> {
-    // Ensure the program exists
     const program = await this.programRepo.findOneBy({
       id: createEpisodeDto.programId,
     });
