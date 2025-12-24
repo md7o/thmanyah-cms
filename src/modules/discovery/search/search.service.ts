@@ -89,7 +89,7 @@ export class SearchService {
       const result = hits.hits.map((hit) => hit._source);
 
       try {
-        await this.cacheManager.set(cacheKey, result);
+        await this.cacheManager.set(cacheKey, result, 600000); // 10 minutes TTL
       } catch (error) {
         console.error('Redis cache set error:', error);
       }
@@ -136,7 +136,7 @@ export class SearchService {
       const hits = result.hits.hits.map((hit) => hit._source);
 
       try {
-        await this.cacheManager.set(cacheKey, hits);
+        await this.cacheManager.set(cacheKey, hits, 600000); // 10 minutes TTL
       } catch (error) {
         console.error('Redis cache set error:', error);
       }
