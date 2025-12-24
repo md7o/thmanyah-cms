@@ -8,6 +8,7 @@ import * as redisStore from 'cache-manager-redis-store';
 import { BullModule } from '@nestjs/bull';
 import { SearchProcessor } from './search.processor';
 import { RequestCoalescingService } from '../../../common/services/request-coalescing.service';
+import { RedisCacheService } from '../../../common/services/redis-cache.service';
 
 @Module({
   imports: [
@@ -40,7 +41,7 @@ import { RequestCoalescingService } from '../../../common/services/request-coale
       name: 'search-queue',
     }),
   ],
-  providers: [SearchService, SearchProcessor, RequestCoalescingService],
+  providers: [SearchService, SearchProcessor, RequestCoalescingService, RedisCacheService],
   exports: [SearchService, BullModule],
 })
 export class SearchModule {}

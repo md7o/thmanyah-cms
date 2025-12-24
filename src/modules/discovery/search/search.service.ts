@@ -6,6 +6,7 @@ import { Program } from '../../cms/program/entities/program.entity';
 import { Episode } from '../../cms/episode/entities/episode.entity';
 import type { SearchFilters, EpisodeSearchFilters } from '../interfaces/search-filters';
 import { RequestCoalescingService } from '../../../common/services/request-coalescing.service';
+import { RedisCacheService } from '../../../common/services/redis-cache.service';
 
 @Injectable()
 export class SearchService {
@@ -13,10 +14,11 @@ export class SearchService {
     private readonly esSearch: ElasticsearchService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly requestCoalescing: RequestCoalescingService,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   async indexProgram(program: Program) {
-    return this.esSearch.index({
+    const result = await this.esSearch.index({
       index: 'programs',
       id: program.id,
       document: {
@@ -28,10 +30,12 @@ export class SearchService {
         createdAt: program.createdAt,
       },
     });
+    await this.invalidateProgramCache();
+    return result;
   }
 
   async indexEpisode(episode: Episode) {
-    return this.esSearch.index({
+    const result = await this.esSearch.index({
       index: 'episodes',
       id: episode.id.toString(),
       document: {
@@ -43,6 +47,8 @@ export class SearchService {
         episodeNumber: episode.episodeNumber,
       },
     });
+    await this.invalidateEpisodeCache();
+    return result;
   }
 
   async findProgramById(id: string) {
@@ -151,10 +157,12 @@ export class SearchService {
 
   async remove(id: string) {
     await this.esSearch.delete({ index: 'programs', id });
+    await this.invalidateProgramCache();
   }
 
   async removeEpisode(id: string) {
     await this.esSearch.delete({ index: 'episodes', id });
+    await this.invalidateEpisodeCache();
   }
 
   async bulkIndexPrograms(programs: Program[]) {
@@ -171,6 +179,7 @@ export class SearchService {
       },
     ]);
     await this.esSearch.bulk({ operations });
+    await this.invalidateProgramCache();
   }
 
   async bulkIndexEpisodes(episodes: Episode[]) {
@@ -187,5 +196,14 @@ export class SearchService {
       },
     ]);
     await this.esSearch.bulk({ operations });
+    await this.invalidateEpisodeCache();
+  }
+
+  async invalidateProgramCache() {
+    await this.redisCacheService.invalidateCache('search:programs:*');
+  }
+
+  async invalidateEpisodeCache() {
+    await this.redisCacheService.invalidateCache('search:episodes:*');
   }
 }
