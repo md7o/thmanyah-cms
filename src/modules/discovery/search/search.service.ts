@@ -5,12 +5,14 @@ import type { Cache } from 'cache-manager';
 import { Program } from '../../cms/program/entities/program.entity';
 import { Episode } from '../../cms/episode/entities/episode.entity';
 import type { SearchFilters, EpisodeSearchFilters } from '../interfaces/search-filters';
+import { RequestCoalescingService } from '../../../common/services/request-coalescing.service';
 
 @Injectable()
 export class SearchService {
   constructor(
     private readonly esSearch: ElasticsearchService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly requestCoalescing: RequestCoalescingService,
   ) {}
 
   async indexProgram(program: Program) {
@@ -63,58 +65,84 @@ export class SearchService {
 
   async search(text?: string, filters: SearchFilters = {}, page = 1, limit = 12) {
     const cacheKey = `search:programs:${text}:${JSON.stringify(filters)}:${page}:${limit}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
 
-    const must = [
-      ...(text ? [{ multi_match: { query: text, fields: ['title', 'description', 'category'] } }] : []),
-      ...Object.entries(filters).map(([key, value]) => ({ match: { [key]: value } })),
-    ];
+    return this.requestCoalescing.execute(cacheKey, async () => {
+      try {
+        const cached = await this.cacheManager.get(cacheKey);
+        if (cached) return cached;
+      } catch (error) {
+        console.error('Redis cache error:', error);
+      }
 
-    const { hits } = await this.esSearch.search({
-      index: 'programs',
-      from: (page - 1) * limit,
-      size: limit,
-      query: { bool: { must } },
+      const must = [
+        ...(text ? [{ multi_match: { query: text, fields: ['title', 'description', 'category'] } }] : []),
+        ...Object.entries(filters).map(([key, value]) => ({ match: { [key]: value } })),
+      ];
+
+      const { hits } = await this.esSearch.search({
+        index: 'programs',
+        from: (page - 1) * limit,
+        size: limit,
+        query: { bool: { must } },
+      });
+
+      const result = hits.hits.map((hit) => hit._source);
+
+      try {
+        await this.cacheManager.set(cacheKey, result);
+      } catch (error) {
+        console.error('Redis cache set error:', error);
+      }
+
+      return result;
     });
-
-    const result = hits.hits.map((hit) => hit._source);
-    await this.cacheManager.set(cacheKey, result);
-    return result;
   }
 
   async searchEpisodes(text?: string, filters: EpisodeSearchFilters = {}, page = 1, limit = 12) {
     const cacheKey = `search:episodes:${text}:${JSON.stringify(filters)}:${page}:${limit}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
 
-    const must: any[] = [];
-    if (text) {
-      must.push({ multi_match: { query: text, fields: ['title', 'description'] } });
-    }
-    if (filters.title) {
-      must.push({ match: { title: { query: filters.title, operator: 'and', fuzziness: 'AUTO' } } });
-    }
-    if (filters.description) {
-      must.push({ match: { description: { query: filters.description, operator: 'and', fuzziness: 'AUTO' } } });
-    }
-    if (filters.episodeNumber) {
-      must.push({ term: { episodeNumber: filters.episodeNumber } });
-    }
-    if (filters.publishDateFrom) {
-      must.push({ range: { publishDate: { gte: filters.publishDateFrom } } });
-    }
+    return this.requestCoalescing.execute(cacheKey, async () => {
+      try {
+        const cached = await this.cacheManager.get(cacheKey);
+        if (cached) return cached;
+      } catch (error) {
+        console.error('Redis cache error:', error);
+      }
 
-    const result = await this.esSearch.search({
-      index: 'episodes',
-      from: (page - 1) * limit,
-      size: limit,
-      query: { bool: { must: must.length ? must : [{ match_all: {} }] } },
+      const must: any[] = [];
+      if (text) {
+        must.push({ multi_match: { query: text, fields: ['title', 'description'] } });
+      }
+      if (filters.title) {
+        must.push({ match: { title: { query: filters.title, operator: 'and', fuzziness: 'AUTO' } } });
+      }
+      if (filters.description) {
+        must.push({ match: { description: { query: filters.description, operator: 'and', fuzziness: 'AUTO' } } });
+      }
+      if (filters.episodeNumber) {
+        must.push({ term: { episodeNumber: filters.episodeNumber } });
+      }
+      if (filters.publishDateFrom) {
+        must.push({ range: { publishDate: { gte: filters.publishDateFrom } } });
+      }
+
+      const result = await this.esSearch.search({
+        index: 'episodes',
+        from: (page - 1) * limit,
+        size: limit,
+        query: { bool: { must: must.length ? must : [{ match_all: {} }] } },
+      });
+
+      const hits = result.hits.hits.map((hit) => hit._source);
+
+      try {
+        await this.cacheManager.set(cacheKey, hits);
+      } catch (error) {
+        console.error('Redis cache set error:', error);
+      }
+
+      return hits;
     });
-
-    const hits = result.hits.hits.map((hit) => hit._source);
-    await this.cacheManager.set(cacheKey, hits);
-    return hits;
   }
 
   async update(program: Program) {
